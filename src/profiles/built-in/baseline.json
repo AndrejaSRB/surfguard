@@ -1,0 +1,10 @@
+{
+  "name": "baseline",
+  "description": "Normal conditions — full airdrop, default slippage, SOL to USDC swap.",
+  "flowConfig": {
+    "inputToken": "SOL",
+    "outputToken": "USDC",
+    "amount": 0.1,
+    "airdropSol": 5
+  }
+}

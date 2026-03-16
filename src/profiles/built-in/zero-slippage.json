@@ -1,0 +1,7 @@
+{
+  "name": "zero-slippage",
+  "description": "Zero slippage tolerance — the swap fails if the execution price differs even slightly from the quote.",
+  "flowConfig": {
+    "slippageBps": 0
+  }
+}

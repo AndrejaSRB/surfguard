@@ -1,0 +1,30 @@
+{
+  "name": "surfguard",
+  "version": "0.1.0",
+  "description": "Test your DeFi flows under different conditions, diff the results, catch regressions before production.",
+  "type": "module",
+  "bin": {
+    "surfguard": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && rm -rf dist/profiles/built-in && cp -r src/profiles/built-in dist/profiles/built-in",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "lint": "biome check src/ tests/",
+    "lint:fix": "biome check --write src/ tests/",
+    "format": "biome format --write src/ tests/"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.7",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

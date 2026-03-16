@@ -1,0 +1,10 @@
+{
+  "name": "low-balance",
+  "description": "Airdrop only 0.01 SOL — insufficient funds to cover the swap, rent, and fees.",
+  "flowConfig": {
+    "inputToken": "SOL",
+    "outputToken": "USDC",
+    "amount": 0.1,
+    "airdropSol": 0.01
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "oracle-shock",
+  "description": "Simulate a 50% SOL/USD oracle price drop via Pyth override before the swap.",
+  "flowConfig": {
+    "inputToken": "SOL",
+    "outputToken": "USDC",
+    "amount": 0.1,
+    "airdropSol": 5
+  },
+  "overrides": [
+    {
+      "templateId": "pyth-sol-usd",
+      "account": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
+      "values": {
+        "priceDropPercent": 50
+      },
+      "label": "SOL/USD 50% crash"
+    }
+  ]
+}
