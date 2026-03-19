@@ -1,4 +1,5 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL, VersionedTransaction } from "@solana/web3.js";
+import { DRIFT_WARNING, isDriftError } from "../../errors/drift.js";
 import { translateError } from "../../errors/translator.js";
 import { profileToScenarios } from "../../surfnet/scenarios.js";
 import { getTokenBySymbol, resolveToken } from "../../tokens/registry.js";
@@ -133,6 +134,9 @@ export class SwapFlow implements FlowRunner {
       logger.success(summary);
     } else {
       logger.error(summary);
+      if (rawErrorMessage && isDriftError(rawErrorMessage)) {
+        logger.warn(DRIFT_WARNING);
+      }
     }
 
     return {
