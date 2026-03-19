@@ -1,0 +1,9 @@
+{
+  "name": "transfer-low-balance",
+  "description": "Try to transfer 1 SOL with only 0.001 SOL in the wallet — always fails.",
+  "flowConfig": {
+    "token": "SOL",
+    "amount": 1.0,
+    "airdropSol": 0.001
+  }
+}

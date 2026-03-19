@@ -1,0 +1,9 @@
+{
+  "name": "transfer-baseline",
+  "description": "Transfer 1 SOL to a fresh wallet under normal conditions.",
+  "flowConfig": {
+    "token": "SOL",
+    "amount": 1.0,
+    "airdropSol": 5
+  }
+}

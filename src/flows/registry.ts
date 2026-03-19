@@ -1,4 +1,5 @@
 import { SwapFlow } from "./swap/index.js";
+import { TransferFlow } from "./transfer/index.js";
 import type { FlowRunner } from "./types.js";
 
 const flows = new Map<string, FlowRunner>();
@@ -17,3 +18,4 @@ export function listFlows(): string[] {
 
 // Register built-in flows
 registerFlow(new SwapFlow());
+registerFlow(new TransferFlow());

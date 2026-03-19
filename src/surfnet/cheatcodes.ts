@@ -48,6 +48,10 @@ export class Cheatcodes {
     await this.client.call<void>("surfnet_setAccount", [pubkey, update]);
   }
 
+  async setTokenAccount(owner: string, mint: string, update: { amount: number }, tokenProgram?: string): Promise<void> {
+    await this.client.call<void>("surfnet_setTokenAccount", [owner, mint, update, tokenProgram ?? null]);
+  }
+
   async resetAccount(pubkey: string): Promise<void> {
     await this.client.call<void>("surfnet_resetAccount", [pubkey]);
   }

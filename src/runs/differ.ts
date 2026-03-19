@@ -1,7 +1,14 @@
 import type { FieldDelta, RiskLevel, RunArtifact, RunDiff } from "./types.js";
 
 // Fields that always differ between runs and shouldn't affect risk assessment
-const NOISE_FIELDS = new Set(["durationMs", "summary", "metadata.walletPubkey", "metadata.computeUnits"]);
+const NOISE_FIELDS = new Set([
+  "durationMs",
+  "summary",
+  "metadata.walletPubkey",
+  "metadata.senderPubkey",
+  "metadata.receiverPubkey",
+  "metadata.computeUnits",
+]);
 
 export function diffRuns(a: RunArtifact, b: RunArtifact): RunDiff {
   const deltas: FieldDelta[] = [];

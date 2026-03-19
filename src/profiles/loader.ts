@@ -10,6 +10,8 @@ const BUILT_IN_PROFILES: Record<string, string> = {
   baseline: "baseline.json",
   "oracle-shock": "oracle-shock.json",
   "low-balance": "low-balance.json",
+  "transfer-baseline": "transfer-baseline.json",
+  "transfer-low-balance": "transfer-low-balance.json",
 };
 
 export async function loadProfile(name: string): Promise<Profile> {

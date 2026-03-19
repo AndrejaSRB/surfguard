@@ -4,12 +4,13 @@ import type { Command } from "commander";
 import { resolveJupiterApiKey, setConfigValue } from "../config/store.js";
 import { DEFAULT_DEX, listDexAdapters } from "../dex/registry.js";
 import { SWAP_DEFAULTS } from "../flows/swap/defaults.js";
+import { TRANSFER_DEFAULTS } from "../flows/transfer/defaults.js";
 import type { Profile } from "../profiles/types.js";
 import { listTokens, resolveToken } from "../tokens/registry.js";
 import { Logger } from "../utils/logger.js";
 import { ask, askRequired, closePrompt } from "../utils/prompt.js";
 
-const SUPPORTED_FLOWS = ["swap"];
+const SUPPORTED_FLOWS = ["swap", "transfer"];
 
 export function registerInitCommand(program: Command): void {
   program
@@ -66,104 +67,133 @@ export function registerInitCommand(program: Command): void {
             process.exit(1);
           }
 
-          // Input token
-          const inputRaw = opts.from ?? (await ask("Input token", "SOL"));
-          const inputResolved = resolveToken(inputRaw);
-          let inputMint: string;
-          let inputSymbol: string;
+          let profile: Profile & { flowConfig: Record<string, unknown> };
+          let profileName: string;
 
-          if (inputResolved.found) {
-            inputSymbol = inputResolved.token.symbol;
-            inputMint = inputResolved.token.mint;
-          } else {
-            if (interactive) {
-              logger.warn(`"${inputRaw}" not in token registry.`);
-              inputMint = await askRequired("Enter mint address");
-              inputSymbol = inputRaw.toUpperCase();
-            } else {
-              logger.error(
-                `Unknown token: "${inputRaw}". Use --from with a known symbol or provide inputMint in the profile.`,
-              );
-              printAvailableTokens(logger);
+          if (flowType === "transfer") {
+            // Transfer-specific prompts
+            const amount = parseFloat(
+              opts.amount ?? (await ask("Transfer amount (SOL)", String(TRANSFER_DEFAULTS.amount))),
+            );
+            const airdropSol = parseFloat(
+              opts.airdrop ?? (await ask("Airdrop SOL", String(TRANSFER_DEFAULTS.airdropSol))),
+            );
+
+            if (Number.isNaN(amount) || amount <= 0) {
+              logger.error("Amount must be a positive number");
               process.exit(1);
             }
-          }
-
-          // Output token
-          const outputRaw = opts.to ?? (await ask("Output token", "USDC"));
-          const outputResolved = resolveToken(outputRaw);
-          let outputMint: string;
-          let outputSymbol: string;
-
-          if (outputResolved.found) {
-            outputSymbol = outputResolved.token.symbol;
-            outputMint = outputResolved.token.mint;
-          } else {
-            if (interactive) {
-              logger.warn(`"${outputRaw}" not in token registry.`);
-              outputMint = await askRequired("Enter mint address");
-              outputSymbol = outputRaw.toUpperCase();
-            } else {
-              logger.error(
-                `Unknown token: "${outputRaw}". Use --to with a known symbol or provide outputMint in the profile.`,
-              );
-              printAvailableTokens(logger);
+            if (Number.isNaN(airdropSol) || airdropSol <= 0) {
+              logger.error("Airdrop must be a positive number");
               process.exit(1);
             }
-          }
 
-          // Amount, airdrop, slippage
-          const amount = parseFloat(opts.amount ?? (await ask("Swap amount", String(SWAP_DEFAULTS.amount))));
-          const airdropSol = parseFloat(opts.airdrop ?? (await ask("Airdrop SOL", String(SWAP_DEFAULTS.airdropSol))));
-          const slippageBps = parseInt(
-            opts.slippage ?? (await ask("Slippage (bps)", String(SWAP_DEFAULTS.slippageBps))),
-            10,
-          );
+            const defaultName = `sol-transfer`;
+            profileName = opts.name ?? (await ask("Profile name", defaultName));
 
-          if (Number.isNaN(amount) || amount <= 0) {
-            logger.error("Amount must be a positive number");
-            process.exit(1);
-          }
-          if (Number.isNaN(airdropSol) || airdropSol <= 0) {
-            logger.error("Airdrop must be a positive number");
-            process.exit(1);
-          }
-          if (Number.isNaN(slippageBps) || slippageBps < 0) {
-            logger.error("Slippage must be a non-negative number");
-            process.exit(1);
-          }
+            profile = {
+              name: profileName,
+              description: `Transfer ${amount} SOL test`,
+              flowConfig: {
+                token: "SOL",
+                amount,
+                airdropSol,
+              },
+            };
+          } else {
+            // Swap-specific prompts
+            const inputRaw = opts.from ?? (await ask("Input token", "SOL"));
+            const inputResolved = resolveToken(inputRaw);
+            let inputMint: string;
+            let inputSymbol: string;
 
-          // DEX adapter
-          const dexName = opts.dex ?? DEFAULT_DEX;
-          if (!listDexAdapters().includes(dexName)) {
-            logger.error(`Unknown DEX adapter: "${dexName}". Available: ${listDexAdapters().join(", ")}`);
-            process.exit(1);
-          }
+            if (inputResolved.found) {
+              inputSymbol = inputResolved.token.symbol;
+              inputMint = inputResolved.token.mint;
+            } else {
+              if (interactive) {
+                logger.warn(`"${inputRaw}" not in token registry.`);
+                inputMint = await askRequired("Enter mint address");
+                inputSymbol = inputRaw.toUpperCase();
+              } else {
+                logger.error(
+                  `Unknown token: "${inputRaw}". Use --from with a known symbol or provide inputMint in the profile.`,
+                );
+                printAvailableTokens(logger);
+                process.exit(1);
+              }
+            }
 
-          // Profile name
-          const defaultName = `${inputSymbol.toLowerCase()}-${outputSymbol.toLowerCase()}-${flowType}`;
-          const profileName = opts.name ?? (await ask("Profile name", defaultName));
+            const outputRaw = opts.to ?? (await ask("Output token", "USDC"));
+            const outputResolved = resolveToken(outputRaw);
+            let outputMint: string;
+            let outputSymbol: string;
 
-          // Build profile
-          const profile: Profile & { flowConfig: Record<string, unknown> } = {
-            name: profileName,
-            description: `${inputSymbol} → ${outputSymbol} ${flowType} test`,
-            flowConfig: {
-              dex: dexName,
-              inputToken: inputSymbol,
-              outputToken: outputSymbol,
-              amount,
-              airdropSol,
-              slippageBps,
-            },
-          };
+            if (outputResolved.found) {
+              outputSymbol = outputResolved.token.symbol;
+              outputMint = outputResolved.token.mint;
+            } else {
+              if (interactive) {
+                logger.warn(`"${outputRaw}" not in token registry.`);
+                outputMint = await askRequired("Enter mint address");
+                outputSymbol = outputRaw.toUpperCase();
+              } else {
+                logger.error(
+                  `Unknown token: "${outputRaw}". Use --to with a known symbol or provide outputMint in the profile.`,
+                );
+                printAvailableTokens(logger);
+                process.exit(1);
+              }
+            }
 
-          // Include mint addresses if tokens were manually entered
-          if (!resolveToken(inputSymbol).found) {
-            profile.flowConfig.inputMint = inputMint;
-          }
-          if (!resolveToken(outputSymbol).found) {
-            profile.flowConfig.outputMint = outputMint;
+            const amount = parseFloat(opts.amount ?? (await ask("Swap amount", String(SWAP_DEFAULTS.amount))));
+            const airdropSol = parseFloat(opts.airdrop ?? (await ask("Airdrop SOL", String(SWAP_DEFAULTS.airdropSol))));
+            const slippageBps = parseInt(
+              opts.slippage ?? (await ask("Slippage (bps)", String(SWAP_DEFAULTS.slippageBps))),
+              10,
+            );
+
+            if (Number.isNaN(amount) || amount <= 0) {
+              logger.error("Amount must be a positive number");
+              process.exit(1);
+            }
+            if (Number.isNaN(airdropSol) || airdropSol <= 0) {
+              logger.error("Airdrop must be a positive number");
+              process.exit(1);
+            }
+            if (Number.isNaN(slippageBps) || slippageBps < 0) {
+              logger.error("Slippage must be a non-negative number");
+              process.exit(1);
+            }
+
+            const dexName = opts.dex ?? DEFAULT_DEX;
+            if (!listDexAdapters().includes(dexName)) {
+              logger.error(`Unknown DEX adapter: "${dexName}". Available: ${listDexAdapters().join(", ")}`);
+              process.exit(1);
+            }
+
+            const defaultName = `${inputSymbol.toLowerCase()}-${outputSymbol.toLowerCase()}-${flowType}`;
+            profileName = opts.name ?? (await ask("Profile name", defaultName));
+
+            profile = {
+              name: profileName,
+              description: `${inputSymbol} → ${outputSymbol} ${flowType} test`,
+              flowConfig: {
+                dex: dexName,
+                inputToken: inputSymbol,
+                outputToken: outputSymbol,
+                amount,
+                airdropSol,
+                slippageBps,
+              },
+            };
+
+            if (!resolveToken(inputSymbol).found) {
+              profile.flowConfig.inputMint = inputMint;
+            }
+            if (!resolveToken(outputSymbol).found) {
+              profile.flowConfig.outputMint = outputMint;
+            }
           }
 
           // Write file

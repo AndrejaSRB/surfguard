@@ -2,6 +2,8 @@ import { Connection, Keypair, LAMPORTS_PER_SOL, VersionedTransaction } from "@so
 import { DEFAULT_DEX, getDexAdapter, listDexAdapters } from "../../dex/registry.js";
 import { DRIFT_WARNING, isDriftError } from "../../errors/drift.js";
 import { translateError } from "../../errors/translator.js";
+import { fundWalletTokens } from "../../funding/funder.js";
+import { parseFundTokens } from "../../funding/parse.js";
 import { profileToScenarios } from "../../surfnet/scenarios.js";
 import { getTokenBySymbol, resolveToken } from "../../tokens/registry.js";
 import type { FlowContext, FlowResult, FlowRunner } from "../types.js";
@@ -77,13 +79,21 @@ export class SwapFlow implements FlowRunner {
     const pubkey = wallet.publicKey.toBase58();
     logger.info(`Airdropping ${swapConfig.airdropSol} SOL to ${pubkey}`);
     await cheatcodes.airdrop(pubkey, Math.floor(swapConfig.airdropSol * LAMPORTS_PER_SOL));
-    logger.success("Wallet funded");
+    logger.success("SOL airdropped");
+
+    // 3b. Fund SPL tokens if specified
+    const fundEntries = parseFundTokens(profile.flowConfig);
+    if (fundEntries.length > 0) {
+      await fundWalletTokens(cheatcodes, pubkey, fundEntries, logger);
+    }
 
     // 4. Resume clock for execution
     await cheatcodes.resumeClock();
 
     // 5. Get quote and swap transaction via DEX adapter
-    const amountLamports = Math.floor(swapConfig.amount * LAMPORTS_PER_SOL);
+    const inputTokenEntry = getTokenBySymbol(swapConfig.inputToken);
+    const inputDecimals = inputTokenEntry?.decimals ?? 9;
+    const amountSmallestUnit = Math.floor(swapConfig.amount * 10 ** inputDecimals);
     const slippageLabel = ` (slippage: ${swapConfig.slippageBps} bps)`;
     logger.info(
       `Getting ${adapter.name} quote for ${swapConfig.amount} ${swapConfig.inputToken} → ${swapConfig.outputToken}${slippageLabel}...`,
@@ -92,7 +102,7 @@ export class SwapFlow implements FlowRunner {
     const quote = await adapter.getQuote({
       inputMint: swapConfig.inputMint,
       outputMint: swapConfig.outputMint,
-      amountLamports,
+      amountLamports: amountSmallestUnit,
       slippageBps: swapConfig.slippageBps,
     });
 
