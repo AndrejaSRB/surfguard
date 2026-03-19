@@ -1,4 +1,5 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL, VersionedTransaction } from "@solana/web3.js";
+import { translateError } from "../../errors/translator.js";
 import { profileToScenarios } from "../../surfnet/scenarios.js";
 import { getTokenBySymbol, resolveToken } from "../../tokens/registry.js";
 import type { FlowContext, FlowResult, FlowRunner } from "../types.js";
@@ -115,15 +116,18 @@ export class SwapFlow implements FlowRunner {
     const value = (rawProfile.value ?? {}) as Record<string, unknown>;
     const txProfileData = (value.transactionProfile ?? {}) as Record<string, unknown>;
 
-    const errorMessage = txProfileData.errorMessage as string | null | undefined;
+    const rawErrorMessage = txProfileData.errorMessage as string | null | undefined;
     const computeUnits = Number(txProfileData.computeUnitsConsumed ?? 0);
     const logMessages = (txProfileData.logMessages ?? []) as string[];
-    const success = !errorMessage;
+    const success = !rawErrorMessage;
+
+    const errorInfo = rawErrorMessage ? translateError(rawErrorMessage) : undefined;
+    const displayError = errorInfo?.translated ?? rawErrorMessage;
 
     const status = success ? "PASS" : "FAIL";
     const summary = success
       ? `Swap succeeded: ${swapConfig.amount} ${swapConfig.inputToken} → ${outputFormatted} ${swapConfig.outputToken} (${computeUnits.toLocaleString()} CU)`
-      : `Swap failed: ${errorMessage} (${computeUnits.toLocaleString()} CU)`;
+      : `Swap failed: ${displayError} (${computeUnits.toLocaleString()} CU)`;
 
     if (success) {
       logger.success(summary);
@@ -139,7 +143,8 @@ export class SwapFlow implements FlowRunner {
       transactionProfile: {
         computeUnits,
         logMessages,
-        errorMessage: errorMessage ?? undefined,
+        errorMessage: rawErrorMessage ?? undefined,
+        errorTranslated: displayError ?? undefined,
         success,
       },
       metadata: {

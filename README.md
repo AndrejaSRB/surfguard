@@ -91,7 +91,7 @@ npm run build         # TypeScript → dist/
 
 ## Docs
 
-See [`docs/`](./docs/) for full command reference, profile guide, and flow documentation.
+[surfguard-docs.vercel.app](https://surfguard-docs.vercel.app/) — full command reference, profile guide, error reference, and flow documentation.
 
 ## License
 

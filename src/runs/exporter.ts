@@ -29,7 +29,9 @@ export function exportRunAsText(artifact: RunArtifact): string {
     if (tp.success != null) {
       lines.push(`    Success:       ${tp.success}`);
     }
-    if (tp.errorMessage) {
+    if (tp.errorTranslated) {
+      lines.push(`    Error:         ${tp.errorTranslated}`);
+    } else if (tp.errorMessage) {
       lines.push(`    Error:         ${tp.errorMessage}`);
     } else if (tp.error) {
       lines.push(`    Error:         ${tp.error}`);
