@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Command } from "commander";
 import { resolveJupiterApiKey, setConfigValue } from "../config/store.js";
+import { DEFAULT_DEX, listDexAdapters } from "../dex/registry.js";
 import { SWAP_DEFAULTS } from "../flows/swap/defaults.js";
 import type { Profile } from "../profiles/types.js";
 import { listTokens, resolveToken } from "../tokens/registry.js";
@@ -15,6 +16,7 @@ export function registerInitCommand(program: Command): void {
     .command("init")
     .description("Create a new profile interactively")
     .option("--type <flow>", "Flow type (swap)")
+    .option("--dex <name>", "DEX adapter (default: jupiter)")
     .option("--from <token>", "Input token symbol")
     .option("--to <token>", "Output token symbol")
     .option("--amount <amount>", "Swap amount")
@@ -25,6 +27,7 @@ export function registerInitCommand(program: Command): void {
     .action(
       async (opts: {
         type?: string;
+        dex?: string;
         from?: string;
         to?: string;
         amount?: string;
@@ -130,6 +133,13 @@ export function registerInitCommand(program: Command): void {
             process.exit(1);
           }
 
+          // DEX adapter
+          const dexName = opts.dex ?? DEFAULT_DEX;
+          if (!listDexAdapters().includes(dexName)) {
+            logger.error(`Unknown DEX adapter: "${dexName}". Available: ${listDexAdapters().join(", ")}`);
+            process.exit(1);
+          }
+
           // Profile name
           const defaultName = `${inputSymbol.toLowerCase()}-${outputSymbol.toLowerCase()}-${flowType}`;
           const profileName = opts.name ?? (await ask("Profile name", defaultName));
@@ -139,6 +149,7 @@ export function registerInitCommand(program: Command): void {
             name: profileName,
             description: `${inputSymbol} → ${outputSymbol} ${flowType} test`,
             flowConfig: {
+              dex: dexName,
               inputToken: inputSymbol,
               outputToken: outputSymbol,
               amount,

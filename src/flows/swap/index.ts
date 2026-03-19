@@ -1,20 +1,21 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL, VersionedTransaction } from "@solana/web3.js";
+import { DEFAULT_DEX, getDexAdapter, listDexAdapters } from "../../dex/registry.js";
 import { DRIFT_WARNING, isDriftError } from "../../errors/drift.js";
 import { translateError } from "../../errors/translator.js";
 import { profileToScenarios } from "../../surfnet/scenarios.js";
 import { getTokenBySymbol, resolveToken } from "../../tokens/registry.js";
 import type { FlowContext, FlowResult, FlowRunner } from "../types.js";
 import { SWAP_DEFAULTS } from "./defaults.js";
-import { getJupiterQuote, getJupiterSwapTransaction } from "./jupiter.js";
 
 interface SwapFlowConfig {
+  dex: string;
   inputToken: string;
   inputMint: string;
   outputToken: string;
   outputMint: string;
   amount: number;
   airdropSol: number;
-  slippageBps?: number;
+  slippageBps: number;
 }
 
 function resolveSwapConfig(flowConfig: Record<string, unknown> | undefined): SwapFlowConfig {
@@ -32,25 +33,32 @@ function resolveSwapConfig(flowConfig: Record<string, unknown> | undefined): Swa
   }
 
   return {
+    dex: (flowConfig?.dex as string | undefined) ?? DEFAULT_DEX,
     inputToken: inputLookup.token.symbol,
     inputMint: inputLookup.token.mint,
     outputToken: outputLookup.token.symbol,
     outputMint: outputLookup.token.mint,
     amount: (flowConfig?.amount as number | undefined) ?? SWAP_DEFAULTS.amount,
     airdropSol: (flowConfig?.airdropSol as number | undefined) ?? SWAP_DEFAULTS.airdropSol,
-    slippageBps: flowConfig?.slippageBps as number | undefined,
+    slippageBps: (flowConfig?.slippageBps as number | undefined) ?? SWAP_DEFAULTS.slippageBps,
   };
 }
 
 export class SwapFlow implements FlowRunner {
   name = "swap";
-  description = "Token swap via Jupiter, profiled through Surfpool";
+  description = "Token swap via DEX adapter, profiled through Surfpool";
 
   async execute(ctx: FlowContext): Promise<FlowResult> {
     const start = Date.now();
     const { cheatcodes, config, logger, profile } = ctx;
     const connection = new Connection(config.rpcUrl);
     const swapConfig = resolveSwapConfig(profile.flowConfig);
+
+    // Resolve DEX adapter
+    const adapter = getDexAdapter(swapConfig.dex);
+    if (!adapter) {
+      throw new Error(`Unknown DEX adapter: "${swapConfig.dex}". Available: ${listDexAdapters().join(", ")}`);
+    }
 
     // 1. Reset network and pause clock for determinism
     logger.info("Resetting network state...");
@@ -74,19 +82,19 @@ export class SwapFlow implements FlowRunner {
     // 4. Resume clock for execution
     await cheatcodes.resumeClock();
 
-    // 5. Get Jupiter quote and swap transaction
+    // 5. Get quote and swap transaction via DEX adapter
     const amountLamports = Math.floor(swapConfig.amount * LAMPORTS_PER_SOL);
-    const slippageLabel = swapConfig.slippageBps !== undefined ? ` (slippage: ${swapConfig.slippageBps} bps)` : "";
+    const slippageLabel = ` (slippage: ${swapConfig.slippageBps} bps)`;
     logger.info(
-      `Getting Jupiter quote for ${swapConfig.amount} ${swapConfig.inputToken} → ${swapConfig.outputToken}${slippageLabel}...`,
+      `Getting ${adapter.name} quote for ${swapConfig.amount} ${swapConfig.inputToken} → ${swapConfig.outputToken}${slippageLabel}...`,
     );
 
-    const quote = await getJupiterQuote(
-      swapConfig.inputMint,
-      swapConfig.outputMint,
+    const quote = await adapter.getQuote({
+      inputMint: swapConfig.inputMint,
+      outputMint: swapConfig.outputMint,
       amountLamports,
-      swapConfig.slippageBps,
-    );
+      slippageBps: swapConfig.slippageBps,
+    });
 
     const outputTokenEntry = getTokenBySymbol(swapConfig.outputToken);
     const outputDecimals = outputTokenEntry?.decimals ?? 6;
@@ -94,7 +102,7 @@ export class SwapFlow implements FlowRunner {
     const outputFormatted = (Number(quote.outAmount) / 10 ** outputDecimals).toFixed(displayPrecision);
     logger.success(`Quote received: ${outputFormatted} ${swapConfig.outputToken}, ${quote.priceImpactPct}% impact`);
 
-    const swapTxBase64 = await getJupiterSwapTransaction(quote, pubkey);
+    const swapTxBase64 = await adapter.buildSwapTransaction(quote, pubkey);
 
     // 6. Deserialize, replace blockhash with Surfpool's, sign, and serialize
     logger.info("Preparing transaction...");
@@ -112,8 +120,7 @@ export class SwapFlow implements FlowRunner {
     // 8. Pause clock and extract results
     await cheatcodes.pauseClock();
 
-    // Parse surfnet_profileTransaction response:
-    // { value: { transactionProfile: { computeUnitsConsumed, logMessages, errorMessage } } }
+    // Parse surfnet_profileTransaction response
     const value = (rawProfile.value ?? {}) as Record<string, unknown>;
     const txProfileData = (value.transactionProfile ?? {}) as Record<string, unknown>;
 
@@ -152,6 +159,7 @@ export class SwapFlow implements FlowRunner {
         success,
       },
       metadata: {
+        dex: adapter.name,
         walletPubkey: pubkey,
         inputToken: swapConfig.inputToken,
         outputToken: swapConfig.outputToken,
